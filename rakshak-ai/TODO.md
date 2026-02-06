@@ -1,0 +1,3 @@
+- [x] Modify detector.py to detect and annotate cars instead of accidents
+- [x] Update app.py to use CarDetector and handle car detection
+- [x] Test video upload and car detection

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rakshak AI Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Rakshak AI – Smart Road Accident Detection</h1>
+        <div class="dashboard">
+            <div class="video-section">
+                <h2>Live Video Feed</h2>
+                <img src="/video_feed?source=webcam" alt="Live Feed">
+                <div class="controls">
+                    <button onclick="changeSource('webcam')">Webcam</button>
+                    <input type="file" id="videoFile" accept="video/*">
+                    <button onclick="uploadVideo()">Upload Video</button>
+                    <input type="text" id="rtspUrl" placeholder="rtsp://example.com/stream">
+                    <button onclick="changeSource(document.getElementById('rtspUrl').value)">IP Camera</button>
+                </div>
+            </div>
+            <div class="alert-section">
+                <h2>Alerts</h2>
+                <div id="alert-popup" class="alert-popup hidden">
+                    <p>ACCIDENT DETECTED!</p>
+                </div>
+                <div id="live-counter">Accidents Today: 0</div>
+            </div>
+            <div class="map-section">
+                <h2>Accident Map</h2>
+                <div id="map"></div>
+            </div>
+            <div class="logs-section">
+                <h2>Accident Logs</h2>
+                <table id="logs-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Timestamp</th>
+                            <th>Lat</th>
+                            <th>Lng</th>
+                            <th>Severity</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="stats-section">
+                <h2>Statistics</h2>
+                <canvas id="stats-chart"></canvas>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
