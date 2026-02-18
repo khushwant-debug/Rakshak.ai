@@ -1,10 +1,18 @@
+import os
 import sqlite3
 from datetime import datetime
 import numpy as np
 
+# Use BASE_DIR for safe file paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 class Database:
-    def __init__(self, db_name='accidents.db'):
-        self.db_name = db_name
+    def __init__(self, db_name=None):
+        # Default DB path inside project base dir
+        if db_name:
+            self.db_name = db_name
+        else:
+            self.db_name = os.path.join(BASE_DIR, 'accidents.db')
         self.create_table()
 
     def create_table(self):

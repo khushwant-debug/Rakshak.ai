@@ -1,6 +1,10 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(__file__))
+
+# BASE_DIR for safe path handling
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+sys.path.insert(0, BASE_DIR)
 
 from flask import Flask, render_template, Response, request, jsonify
 from detector import CarDetector
@@ -9,16 +13,20 @@ from database import Database
 import cv2
 import threading
 import time
-import os
 import numpy as np
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-# Use an absolute path for uploads (folder inside the app directory)
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'videos')
+
+# Use BASE_DIR for safe path handling
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'videos')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 # Ensure the upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Initialize detector, alerts, and database
+# Note: CarDetector now loads model lazily, so this won't block startup
 detector = CarDetector()
 alerts = Alerts()
 db = Database()
@@ -102,4 +110,6 @@ def get_stats():
     return jsonify({'accident_count': count})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Get PORT from environment (for cloud deployment) or default to 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
