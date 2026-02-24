@@ -11,7 +11,12 @@ Functions:
 - process_video_stream(source): Process video frames for real-time detection
 """
 
-import cv2
+# Safe import for OpenCV - handles cloud environments
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 import numpy as np
 import os
 import torch
@@ -102,6 +107,14 @@ def detect_vehicles(image):
             - boxes: List of (x1, y1, x2, y2, class_id) tuples
     """
     global _model, _demo_mode
+    
+    # Check cv2 availability
+    if cv2 is None:
+        # Return a placeholder image with error text
+        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(placeholder, "OpenCV Not Available", (100, 240), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        return placeholder, 0, []
     
     # Lazy load model on first use
     if _model is None:
@@ -214,6 +227,15 @@ def process_image(image_path):
             - severity: Severity level (0 if no accident)
             - boxes: List of detection boxes
     """
+    if cv2 is None:
+        return {
+            'error': 'OpenCV not available',
+            'vehicle_count': 0,
+            'accident_detected': False,
+            'severity': 0,
+            'boxes': []
+        }
+    
     # Read the image
     image = cv2.imread(image_path)
     if image is None:
@@ -269,6 +291,7 @@ def init():
 if __name__ == "__main__":
     # Test the model logic
     print("Testing Rakshak AI Model Logic...")
+    print(f"OpenCV available: {cv2 is not None}")
     model = load_model()
     if model:
         print("Model loaded successfully!")

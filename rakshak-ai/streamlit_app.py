@@ -18,12 +18,17 @@ Usage:
 """
 
 import streamlit as st
-import cv2
 import numpy as np
 import os
 import tempfile
 from datetime import datetime
 import pandas as pd
+
+# Safe import for OpenCV - handles cloud environments
+try:
+    import cv2
+except Exception:
+    cv2 = None
 
 # Import the model logic
 from model_logic import (
@@ -52,11 +57,25 @@ DEMO_MODE_WARNING = """
 To enable full functionality, ensure the model file exists and dependencies are installed.
 """
 
+CV2_ERROR = """
+⚠️ **OpenCV Error**: Failed to import cv2. This is likely a cloud deployment issue.
+Please ensure requirements.txt contains: opencv-python-headless==4.10.0.84
+"""
+
+
 def initialize_model():
     """Initialize the YOLO model."""
     with st.spinner("Loading YOLO model..."):
         model = load_model()
     return model
+
+
+def check_cv2():
+    """Check if cv2 is available."""
+    if cv2 is None:
+        st.error(CV2_ERROR)
+        return False
+    return True
 
 
 def process_uploaded_image(uploaded_file):
@@ -69,6 +88,9 @@ def process_uploaded_image(uploaded_file):
     Returns:
         dict: Detection results
     """
+    if not check_cv2():
+        return {'error': 'OpenCV not available', 'vehicle_count': 0}
+    
     # Convert uploaded file to image
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
@@ -105,6 +127,9 @@ def process_uploaded_video(uploaded_file):
     Returns:
         dict: Processing results with video path and stats
     """
+    if not check_cv2():
+        return {'error': 'OpenCV not available', 'total_frames': 0}
+    
     # Save uploaded video to temp file
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     tfile.write(uploaded_file.read())
@@ -184,6 +209,11 @@ def process_uploaded_video(uploaded_file):
 
 def main():
     """Main Streamlit application."""
+    
+    # Check cv2 availability first
+    if cv2 is None:
+        st.error(CV2_ERROR)
+        st.stop()
     
     # Header
     st.title("🚗 Rakshak AI")
