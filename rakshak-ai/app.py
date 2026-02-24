@@ -1,3 +1,12 @@
+"""
+Rakshak AI - Flask Web Application
+=================================
+Car Accident Detection System using YOLO
+
+This is the original Flask version of the app.
+For Streamlit Cloud deployment, use streamlit_app.py instead.
+"""
+
 import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -6,27 +15,52 @@ from flask import Flask, render_template, Response, request, jsonify
 from detector import CarDetector
 from alerts import Alerts
 from database import Database
-import cv2
+
+# Safe import for OpenCV
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 import threading
 import time
-import os
 import numpy as np
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+
 # Use an absolute path for uploads (folder inside the app directory)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'videos')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 # Ensure the upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-detector = CarDetector()
+
+# Initialize components - only if cv2 is available
+if cv2 is not None:
+    detector = CarDetector()
+else:
+    detector = None
+    print("Warning: OpenCV not available - detection disabled")
+
 alerts = Alerts()
 db = Database()
 
 accident_event = threading.Event()
 current_accident_status = {'accident': False, 'severity': 0}
 
+
 def generate_frames(source):
+    if detector is None:
+        # Yield error frame
+        blank_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(blank_frame, "OpenCV Not Available", (100, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        ret, buffer = cv2.imencode('.jpg', blank_frame)
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        return
+    
     try:
         if source not in ['webcam'] and not source.startswith('rtsp://'):
             source = os.path.join(app.config['UPLOAD_FOLDER'], source)
@@ -52,6 +86,7 @@ def generate_frames(source):
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
+
 def handle_accident(severity):
     try:
         alerts.play_siren()
@@ -65,14 +100,17 @@ def handle_accident(severity):
     current_accident_status['severity'] = 0
     accident_event.clear()
 
+
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')
+
 
 @app.route('/video_feed')
 def video_feed():
     source = request.args.get('source', 'webcam')
     return Response(generate_frames(source), mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
 @app.route('/upload_video', methods=['POST'])
 def upload_video():
@@ -87,19 +125,25 @@ def upload_video():
         file.save(filepath)
         return jsonify({'filename': filename})
 
+
 @app.route('/accident_status')
 def accident_status():
     return jsonify(current_accident_status)
+
 
 @app.route('/logs')
 def get_logs():
     logs = db.get_logs()
     return jsonify(logs)
 
+
 @app.route('/stats')
 def get_stats():
     count = db.get_accident_count()
     return jsonify({'accident_count': count})
 
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Get PORT from environment (for cloud deployment) or default to 5000
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

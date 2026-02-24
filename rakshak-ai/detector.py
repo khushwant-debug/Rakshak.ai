@@ -1,4 +1,18 @@
-import cv2
+"""
+Rakshak AI - Car Detector
+=========================
+YOLO-based car/vehicle detection with accident detection.
+Used by the Flask app for real-time video processing.
+
+Note: For Streamlit Cloud, use model_logic.py instead.
+"""
+
+# Safe import for OpenCV - handles cloud environments
+try:
+    import cv2
+except Exception:
+    cv2 = None
+
 import numpy as np
 import os
 
@@ -24,6 +38,10 @@ class CarDetector:
         Args:
             model_name: Name of YOLO model to use (default: yolov8n.pt)
         """
+        # Check cv2 availability
+        if cv2 is None:
+            raise ImportError("OpenCV (cv2) is not available. Please install opencv-python-headless")
+        
         from ultralytics import YOLO
         
         print(f"Loading YOLO model: {model_name}")
