@@ -5,7 +5,7 @@ This module contains the core AI detection logic extracted from the Flask app.
 It can be used by both the Flask app and the Streamlit app.
 
 Functions:
-- load_model(): Load the YOLO model
+- load_model(): Load the YOLO model (auto-downloads if not present)
 - detect_vehicles(image): Detect vehicles in an image
 - check_accident(boxes): Check for accidents from overlapping vehicles
 - process_video_stream(source): Process video frames for real-time detection
@@ -37,50 +37,69 @@ torch.load = _patched_torch_load
 
 # Global cached model variable for lazy loading
 _model = None
-_demo_mode = False
+_model_loading_error = None
 
 
-def load_model(model_path=None):
+def load_model(model_name="yolov8n.pt"):
     """
     Load the YOLO model for vehicle detection.
+    Automatically downloads the model if not present locally.
     
     Args:
-        model_path: Path to the YOLO model file. Defaults to models/yolov8n.pt
+        model_name: Name of the YOLO model to load (default: yolov8n.pt)
+                    Uses Ultralytics auto-download feature.
         
     Returns:
-        The loaded YOLO model, or None if in demo mode
+        The loaded YOLO model, or None if failed
     """
-    global _model, _demo_mode
+    global _model, _model_loading_error
     
     if _model is not None:
         return _model
     
-    # Check if model file exists
-    if model_path is None:
-        model_path = os.path.join(BASE_DIR, 'models', 'yolov8n.pt')
-    
-    if not os.path.exists(model_path):
-        print("Running in DEMO MODE – model not loaded")
-        print(f"Model file not found at: {model_path}")
-        _demo_mode = True
-        return None
+    if _model_loading_error:
+        print(f"Previous error loading model: {_model_loading_error}")
     
     try:
         from ultralytics import YOLO
-        print(f"Loading YOLO model from: {model_path}")
-        _model = YOLO(model_path)
-        print("YOLO model loaded successfully")
+        print(f"Loading YOLO model: {model_name}")
+        print("Model will be auto-downloaded if not cached...")
+        
+        # YOLO() automatically downloads the model if not present
+        # It caches the model after first download
+        _model = YOLO(model_name)
+        
+        print("YOLO model loaded successfully!")
         return _model
     except Exception as e:
+        _model_loading_error = str(e)
         print(f"Failed to load YOLO model: {e}")
-        print("Running in DEMO MODE – model not loaded")
-        _demo_mode = True
+        print("Running without model - demo mode")
         return None
 
 
+def get_model():
+    """
+    Get the YOLO model instance (lazy loading).
+    This is the recommended way to access the model.
+    
+    Returns:
+        The loaded YOLO model, or None if failed
+    """
+    global _model
+    if _model is None:
+        return load_model()
+    return _model
+
+
 def is_demo_mode():
-    """Return whether the model is in demo mode."""
-    return _demo_mode or _model is None
+    """Return whether the model failed to load."""
+    return _model is None
+
+
+def get_model_loading_error():
+    """Return the error message from model loading, if any."""
+    return _model_loading_error
 
 
 def get_vehicle_classes():
@@ -106,7 +125,7 @@ def detect_vehicles(image):
             - vehicle_count: Number of vehicles detected
             - boxes: List of (x1, y1, x2, y2, class_id) tuples
     """
-    global _model, _demo_mode
+    global _model
     
     # Check cv2 availability
     if cv2 is None:
@@ -120,15 +139,15 @@ def detect_vehicles(image):
     if _model is None:
         load_model()
     
-    # Demo mode - return fake detection results
-    if _demo_mode or _model is None:
+    # If model still not loaded, return demo mode
+    if _model is None:
         # Create annotated frame with demo text
         annotated_image = image.copy()
         if annotated_image is None or annotated_image.size == 0:
             annotated_image = np.zeros((480, 640, 3), dtype=np.uint8)
         
         # Draw demo text on frame
-        cv2.putText(annotated_image, "DEMO MODE - No Model", (50, 50), 
+        cv2.putText(annotated_image, "DEMO MODE - Model Not Loaded", (50, 50), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         cv2.putText(annotated_image, "Vehicles Detected: 0", (50, 100), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -136,29 +155,37 @@ def detect_vehicles(image):
         return annotated_image, 0, []
     
     # Normal mode - use YOLO model
-    results = _model(image)
-    annotated_image = results[0].plot()
-    
-    # Count vehicles
-    vehicle_count = 0
-    vehicle_classes = get_vehicle_classes()
-    boxes = []
-    
-    for result in results:
-        for box in result.boxes:
-            cls = int(box.cls[0])
-            if cls in vehicle_classes:
-                vehicle_count += 1
-            
-            # Extract box coordinates
-            xy = box.xyxy[0].tolist()
-            boxes.append((xy[0], xy[1], xy[2], xy[3], cls))
-    
-    # Draw vehicle count on frame
-    cv2.putText(annotated_image, f"Vehicles Detected: {vehicle_count}", (50, 50), 
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
-    return annotated_image, vehicle_count, boxes
+    try:
+        results = _model(image)
+        annotated_image = results[0].plot()
+        
+        # Count vehicles
+        vehicle_count = 0
+        vehicle_classes = get_vehicle_classes()
+        boxes = []
+        
+        for result in results:
+            for box in result.boxes:
+                cls = int(box.cls[0])
+                if cls in vehicle_classes:
+                    vehicle_count += 1
+                
+                # Extract box coordinates
+                xy = box.xyxy[0].tolist()
+                boxes.append((xy[0], xy[1], xy[2], xy[3], cls))
+        
+        # Draw vehicle count on frame
+        cv2.putText(annotated_image, f"Vehicles Detected: {vehicle_count}", (50, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        return annotated_image, vehicle_count, boxes
+    except Exception as e:
+        print(f"Error during detection: {e}")
+        # Return demo mode on error
+        annotated_image = image.copy()
+        cv2.putText(annotated_image, f"Detection Error: {str(e)[:50]}", (50, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        return annotated_image, 0, []
 
 
 def check_accident(boxes, overlap_threshold=0.8, min_area=5000, min_consecutive=3):
@@ -292,11 +319,13 @@ if __name__ == "__main__":
     # Test the model logic
     print("Testing Rakshak AI Model Logic...")
     print(f"OpenCV available: {cv2 is not None}")
-    model = load_model()
+    
+    # Try to load model (will auto-download if needed)
+    model = load_model("yolov8n.pt")
     if model:
-        print("Model loaded successfully!")
+        print("✅ Model loaded successfully!")
     else:
-        print("Running in demo mode - no model loaded")
+        print("❌ Model failed to load - will run in demo mode")
     
     print(f"Demo mode: {is_demo_mode()}")
     print(f"Vehicle classes: {get_vehicle_classes()}")

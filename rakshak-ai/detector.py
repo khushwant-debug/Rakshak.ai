@@ -1,11 +1,9 @@
 import cv2
 import numpy as np
-from ultralytics import YOLO
 import os
-import time
-import torch
 
 # Patch torch.load to use weights_only=False for YOLO model compatibility
+import torch
 _original_torch_load = torch.load
 
 def _patched_torch_load(f, *args, **kwargs):
@@ -16,16 +14,25 @@ def _patched_torch_load(f, *args, **kwargs):
 
 torch.load = _patched_torch_load
 
+
 class CarDetector:
-    def __init__(self, model_path=None):
-        # Use correct path: models/ is in the same directory as this file
-        if model_path is None:
-            model_path = os.path.join(os.path.dirname(__file__), 'models', 'yolov8n.pt')
-        # Ensure model file exists, if not auto-download will happen
-        if not os.path.exists(model_path):
-            print(f"Model not found at {model_path}, will be auto-downloaded...")
-            os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        self.model = YOLO(model_path)
+    def __init__(self, model_name="yolov8n.pt"):
+        """
+        Initialize the car detector with YOLO model.
+        Model is automatically downloaded if not present.
+        
+        Args:
+            model_name: Name of YOLO model to use (default: yolov8n.pt)
+        """
+        from ultralytics import YOLO
+        
+        print(f"Loading YOLO model: {model_name}")
+        print("Model will be auto-downloaded if not cached...")
+        
+        # YOLO() automatically downloads the model if not present
+        # It caches the model after first download
+        self.model = YOLO(model_name)
+        
         # counter for consecutive-frame overlaps to confirm collisions
         self.overlap_count = 0
         self.prev_boxes = []
